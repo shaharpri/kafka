@@ -1,5 +1,4 @@
 from kafka import KafkaProducer
-import json
 from requests_sse import EventSource
 
 url = "https://stream.wikimedia.org/v2/stream/recentchange"
