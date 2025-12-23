@@ -1,0 +1,68 @@
+
+sqlite3 wiki.db
+
+foreign keys on:
+PRAGMA foreign_keys = ON;
+
+
+CREATE TABLE meta (
+uri STRING,
+request_id STRING,
+id STRING NOT NULL PRIMARY KEY ,
+domain STRING,
+stream STRING,
+dt STRING,
+topic STRING,
+partition INTEGER,
+offset INTEGER
+);
+
+CREATE TABLE revision (
+revision_id INTEGER PRIMARY KEY,
+old INTEGER,
+new INTEGER
+);
+
+CREATE TABLE length (
+length_id INTEGER PRIMARY KEY,
+old INTEGER,
+new INTEGER
+);
+
+CREATE TABLE wiki_changes (
+schema STRING,
+meta_id STRING,
+id INTEGER NOT NULL PRIMARY KEY,
+type STRING,
+namespace INTEGER,
+title STRING,
+title_url STRING,
+comment STRING,
+parsedcomment STRING,
+timestamp INTEGER,
+user STRING,
+bot BOOLEAN,
+minor BOOLEAN,
+patrolled BOOLEAN,
+notify_url STRING,
+server_url STRING,
+server_name STRING,
+server_script_path STRING,
+wiki STRING,
+length_id INTEGER,
+revision_id INTEGER,
+log_id INTEGER,
+log_type STRING,
+log_action STRING,
+log_params STRING,
+log_action_comment STRING,
+
+FOREIGN KEY(meta_id) REFERENCES meta(id),
+FOREIGN KEY(length_id) REFERENCES length(length_id),
+FOREIGN KEY(revision_id) REFERENCES revision(revision_id)
+);
+
+
+
+
+
