@@ -1,0 +1,98 @@
+turn on docker:
+sudo systemctl start docker
+
+turn on containers:
+docker start pg
+docker start superset_app
+
+superset:
+http://localhost:8088
+
+
+run the image:
+docker run --name pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:16
+
+go into postgres:
+docker exec -it pg psql -U postgres
+
+create DB:
+CREATE DATABASE wiki;
+
+connect to the DB:
+\c wiki
+
+create table:
+CREATE TABLE test_table (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name TEXT
+);
+
+check table: 
+\dt
+
+check table schema:
+\d test_table
+
+create tables:
+CREATE TABLE meta (
+id UUID PRIMARY KEY ,
+uri TEXT,
+request_id UUID,
+domain TEXT,
+stream TEXT,
+dt TIMESTAMPTZ,
+topic TEXT,
+partition INTEGER,
+meta_offset BIGINT
+);
+
+CREATE TABLE revision (
+revision_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+old INTEGER,
+new INTEGER
+);
+
+CREATE TABLE length (
+length_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+old INTEGER,
+new INTEGER
+);
+
+
+
+CREATE TABLE wiki_changes (
+event_schema TEXT,
+meta_id UUID,
+id INTEGER PRIMARY KEY,
+type TEXT,
+namespace INTEGER,
+title TEXT,
+title_url TEXT,
+comment TEXT,
+parsedcomment TEXT,
+timestamp BIGINT,
+user_name TEXT,
+bot BOOLEAN,
+minor BOOLEAN,
+patrolled BOOLEAN,
+notify_url TEXT,
+server_url TEXT,
+server_name TEXT,
+server_script_path TEXT,
+wiki TEXT,
+length_id INTEGER,
+revision_id INTEGER,
+log_id INTEGER,
+log_type TEXT,
+log_action TEXT,
+log_params TEXT,
+log_action_comment TEXT,
+
+FOREIGN KEY(meta_id) REFERENCES meta(id),
+FOREIGN KEY(length_id) REFERENCES length(length_id),
+FOREIGN KEY(revision_id) REFERENCES revision(revision_id)
+);
+
+http://localhost:8088/superset/welcome/
+
+

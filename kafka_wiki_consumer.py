@@ -1,19 +1,22 @@
 from kafka import KafkaConsumer
-import sqlite3
 import json
+
+import psycopg
+from psycopg.rows import dict_row
 
 
 def meta_table_init_vars(meta):
     query = """
-    INSERT OR IGNORE INTO meta
-    (uri, request_id, id, domain, stream, dt, topic, partition, offset)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO meta
+    (uri, request_id, id, domain, stream, dt, topic, partition, meta_offset)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (id) DO NOTHING
     """
 
     values = (
         meta.get("uri"),
         meta.get("request_id"),
-        meta["id"],          # required
+        meta["id"],          
         meta.get("domain"),
         meta.get("stream"),
         meta.get("dt"),
@@ -28,7 +31,8 @@ def length_table_init_vars(length):
     query = """
     INSERT INTO length
     (old, new)
-    VALUES (?, ?)
+    VALUES (%s, %s)
+    RETURNING length_id
     """
 
     values = (
@@ -42,7 +46,8 @@ def revision_table_init_vars(revision):
     query = """
     INSERT INTO revision
     (old, new)
-    VALUES (?, ?)
+    VALUES (%s, %s)
+    RETURNING revision_id
     """
 
     values = (
@@ -55,14 +60,15 @@ def revision_table_init_vars(revision):
 
 def wiki_changes_table_init_vars(wiki_changes: dict, meta: dict, length_id: int, revision_id: int):
     query = """
-    INSERT OR IGNORE INTO wiki_changes
+    INSERT INTO wiki_changes
     (
-        schema, meta_id, id, type, namespace, title, title_url, comment, parsedcomment,
-        timestamp, user, bot, minor, patrolled, notify_url, server_url, server_name,
+        event_schema, meta_id, id, type, namespace, title, title_url, comment, parsedcomment,
+        timestamp, user_name, bot, minor, patrolled, notify_url, server_url, server_name,
         server_script_path, wiki, length_id, revision_id, log_id, log_type, log_action,
         log_params, log_action_comment
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (id) DO NOTHING
     """
 
     values = (
@@ -97,11 +103,20 @@ def wiki_changes_table_init_vars(wiki_changes: dict, meta: dict, length_id: int,
     return query, values
 if __name__ == "__main__":
     try:
-        conn = sqlite3.connect("/home/shahar/Downloads/kafka_2.13-4.1.1/wiki.db")
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON;")
+        conn = psycopg.connect(
+            host="localhost",
+            port=5432,
+            dbname="wiki",
+            user="postgres",
+            password="postgres",
+            row_factory=dict_row,   
+        )
+
+        cur = conn.cursor()
+
     except Exception as e:
         print(f"Error with connection to DB {e}")
+        raise
 
     consumer = KafkaConsumer(
         "wiki-stream-events",
@@ -112,7 +127,10 @@ if __name__ == "__main__":
 
     for msg in consumer:
         event = json.loads(msg.value.decode("utf-8"))
-
+        change_id = event.get("id")
+        if change_id is None:
+            print("Skipping event without id:", event.get("type"))
+            continue
         meta = event.get("meta", {})
         meta_query, meta_values = meta_table_init_vars(meta)
         
@@ -121,27 +139,27 @@ if __name__ == "__main__":
 
         revision = event.get("revision", {})
         revision_query, revision_values = revision_table_init_vars(revision)
-
         try:
 
-            cursor.execute(meta_query, meta_values)
-            cursor.execute(length_query, length_values)
-            length_id = cursor.lastrowid
-            cursor.execute(revision_query, revision_values)
-            revision_id = cursor.lastrowid
+            cur.execute(meta_query, meta_values)
 
+            cur.execute(length_query, length_values)
+            row = cur.fetchone()
+            length_id = row["length_id"] if row else None
+            
+            cur.execute(revision_query, revision_values)
+            row = cur.fetchone()
+            revision_id = row["revision_id"] if row else None
+            
             main_query, main_values = wiki_changes_table_init_vars(event, meta, length_id, revision_id)
-            cursor.execute(main_query, main_values)
+            cur.execute(main_query, main_values)
 
             conn.commit()
-
+            
         except Exception as e:
             conn.rollback()
             print("DB error:", e)
             continue
-
-
-
 
     conn.close()
 
